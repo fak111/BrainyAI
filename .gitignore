@@ -1,6 +1,6 @@
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+#study
+do-study/
 # dependencies
 /node_modules
 /.pnp
@@ -21,6 +21,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
 
 out/
 build/
@@ -33,4 +34,18 @@ dist/
 .tsbuildinfo
 
 .idea
+
+# cursor and development tools
+.cursor/
+.promptx/
+
+# demo and documentation files
+phase2-demo.md
+phase3-demo.md
+phase3-quick-start.md
+phase4-demo.md
+phase4-quick-start.md
+
+# test files
+get-extension-url.html
 
