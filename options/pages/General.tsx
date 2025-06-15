@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { mcpConfigManager, type MCPServiceConfig } from "~libs/mcp/MCPConfigManager";
+import { ModelConfigManager, type ModelConfig } from "~libs/chatbot/ModelConfigManager";
+import { AddModelConfigForm } from "~component/AddModelConfigForm";
 
 // 预设配置模板
 const CONFIG_TEMPLATES = {
@@ -46,6 +48,7 @@ const CONFIG_TEMPLATES = {
 };
 
 export default function General() {
+    // MCP相关状态
     const [services, setServices] = useState<MCPServiceConfig[]>([]);
     const [selectedService, setSelectedService] = useState<string>("");
     const [jsonConfig, setJsonConfig] = useState<string>("");
@@ -54,14 +57,34 @@ export default function General() {
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
     const [showConfigEditor, setShowConfigEditor] = useState<boolean>(false);
 
+    // AI模型相关状态
+    const [modelConfigs, setModelConfigs] = useState<ModelConfig[]>([]);
+    const [showAddModelForm, setShowAddModelForm] = useState<boolean>(false);
+    const [editingModel, setEditingModel] = useState<ModelConfig | null>(null);
+    const [modelConfigManager] = useState(() => new ModelConfigManager());
+
     useEffect(() => {
-        // 加载现有服务
+        // 加载现有MCP服务
         setServices(mcpConfigManager.getAllServices());
 
-        // 订阅服务状态更新
+        // 订阅MCP服务状态更新
         const unsubscribe = mcpConfigManager.onStatusUpdate(setServices);
+
+        // 加载AI模型配置
+        loadModelConfigs();
+
         return unsubscribe;
     }, []);
+
+    // 加载AI模型配置
+    const loadModelConfigs = async () => {
+        try {
+            const configs = await modelConfigManager.listConfigs();
+            setModelConfigs(configs);
+        } catch (error) {
+            console.error('Failed to load model configs:', error);
+        }
+    };
 
     // 验证JSON格式
     const validateJson = (jsonStr: string) => {
@@ -103,7 +126,7 @@ export default function General() {
         }
     };
 
-    // 添加服务
+    // 添加MCP服务
     const handleAddService = async () => {
         if (!jsonConfig.trim()) {
             setMessage({ type: 'error', text: '请输入配置JSON' });
@@ -162,7 +185,7 @@ export default function General() {
         }
     };
 
-    // 启动服务
+    // 启动MCP服务
     const handleStartService = async (serviceId: string) => {
         try {
             await mcpConfigManager.startService(serviceId);
@@ -172,7 +195,7 @@ export default function General() {
         }
     };
 
-    // 停止服务
+    // 停止MCP服务
     const handleStopService = async (serviceId: string) => {
         try {
             await mcpConfigManager.stopService(serviceId);
@@ -182,7 +205,7 @@ export default function General() {
         }
     };
 
-    // 删除服务
+    // 删除MCP服务
     const handleRemoveService = async (serviceId: string) => {
         if (confirm('确定要删除这个服务吗？')) {
             try {
@@ -191,6 +214,48 @@ export default function General() {
             } catch (error) {
                 setMessage({ type: 'error', text: `删除失败: ${error.message}` });
             }
+        }
+    };
+
+    // 处理AI模型配置保存成功
+    const handleModelConfigSuccess = async (config: ModelConfig) => {
+        setMessage({ type: 'success', text: editingModel ? '模型配置已更新' : '模型配置已添加' });
+        await loadModelConfigs();
+        setShowAddModelForm(false);
+        setEditingModel(null);
+    };
+
+    // 编辑AI模型配置
+    const handleEditModel = (config: ModelConfig) => {
+        setEditingModel(config);
+        setShowAddModelForm(true);
+    };
+
+    // 删除AI模型配置
+    const handleDeleteModel = async (configId: string) => {
+        if (confirm('确定要删除这个模型配置吗？')) {
+            try {
+                await modelConfigManager.deleteConfig(configId);
+                setMessage({ type: 'success', text: '模型配置已删除' });
+                await loadModelConfigs();
+            } catch (error) {
+                setMessage({ type: 'error', text: `删除失败: ${error.message}` });
+            }
+        }
+    };
+
+    // 测试AI模型连接
+    const handleTestModel = async (config: ModelConfig) => {
+        try {
+            setMessage({ type: 'info', text: '正在测试连接...' });
+            const isValid = await modelConfigManager.validateConfig(config);
+            if (isValid) {
+                setMessage({ type: 'success', text: '连接测试成功' });
+            } else {
+                setMessage({ type: 'error', text: '连接测试失败' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: `测试失败: ${error.message}` });
         }
     };
 
@@ -209,16 +274,87 @@ export default function General() {
                 <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
             </div>
 
-            <div className="px-8 py-6">
+            <div className="px-8 py-6 space-y-8">
+                {/* AI Models 部分 */}
+                <div>
+                    <h2 className="text-lg font-medium text-gray-900 mb-2">AI Models</h2>
+                    <p className="text-sm text-gray-600 mb-6">
+                        Configure API-based AI models with advanced features like tool calling and MCP integration.
+                    </p>
+
+                    {/* 模型配置列表 */}
+                    <div className="space-y-4 mb-6">
+                        {modelConfigs.map(config => (
+                            <div key={config.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <span className="font-medium text-gray-900">{config.name}</span>
+                                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                                            {config.provider}
+                                        </span>
+                                        {config.supportsMCP && (
+                                            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                                                🔧 MCP
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        <div className="mb-1">Model: {config.model}</div>
+                                        {config.baseUrl && (
+                                            <div className="font-mono text-xs bg-gray-50 px-2 py-1 rounded">
+                                                {config.baseUrl}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-4">
+                                    <button
+                                        onClick={() => handleTestModel(config)}
+                                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    >
+                                        Test
+                                    </button>
+                                    <button
+                                        onClick={() => handleEditModel(config)}
+                                        className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteModel(config.id)}
+                                        className="p-2 text-gray-400 hover:text-red-600"
+                                        title="Delete model"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 添加模型按钮 */}
+                    <button
+                        onClick={() => {
+                            setEditingModel(null);
+                            setShowAddModelForm(true);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Add Model Configuration
+                    </button>
+                </div>
+
                 {/* Model Context Protocol 部分 */}
-                <div className="mb-8">
+                <div>
                     <h2 className="text-lg font-medium text-gray-900 mb-2">Model Context Protocol</h2>
                     <p className="text-sm text-gray-600 mb-6">
                         Claude can receive information like prompts and attachments from specialized servers using Model Context Protocol.
                         <a href="#" className="text-blue-600 hover:text-blue-800 ml-1">Learn more</a>
                     </p>
 
-                    {/* 服务列表 */}
+                    {/* MCP服务列表 */}
                     <div className="space-y-4 mb-6">
                         {services.map(service => (
                             <div key={service.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
@@ -275,7 +411,7 @@ export default function General() {
                         ))}
                     </div>
 
-                    {/* 添加配置按钮 */}
+                    {/* 添加MCP配置按钮 */}
                     {!showConfigEditor && (
                         <button
                             onClick={() => setShowConfigEditor(true)}
@@ -285,7 +421,7 @@ export default function General() {
                         </button>
                     )}
 
-                    {/* 配置编辑器 */}
+                    {/* MCP配置编辑器 */}
                     {showConfigEditor && (
                         <div className="border border-gray-200 rounded-lg p-6 bg-gray-50">
                             <div className="flex items-center justify-between mb-4">
@@ -376,20 +512,31 @@ export default function General() {
                             </div>
                         </div>
                     )}
-
-                    {/* 消息提示 */}
-                    {message && (
-                        <div className={`mt-4 p-3 rounded-lg text-sm ${message.type === 'success'
-                            ? 'bg-green-100 text-green-800 border border-green-200'
-                            : message.type === 'error'
-                                ? 'bg-red-100 text-red-800 border border-red-200'
-                                : 'bg-blue-100 text-blue-800 border border-blue-200'
-                            }`}>
-                            {message.text}
-                        </div>
-                    )}
                 </div>
+
+                {/* 消息提示 */}
+                {message && (
+                    <div className={`p-3 rounded-lg text-sm ${message.type === 'success'
+                        ? 'bg-green-100 text-green-800 border border-green-200'
+                        : message.type === 'error'
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}>
+                        {message.text}
+                    </div>
+                )}
             </div>
+
+            {/* AI模型配置Modal */}
+            <AddModelConfigForm
+                visible={showAddModelForm}
+                onClose={() => {
+                    setShowAddModelForm(false);
+                    setEditingModel(null);
+                }}
+                onSuccess={handleModelConfigSuccess}
+                editConfig={editingModel}
+            />
         </div>
     );
 }
